@@ -33,39 +33,190 @@ Large Language Model은 인공지능 분야에서 가장 혁신적인 발전 중
 ### Attention Is All You Need
 
 **발표**: 2017년 6월
-**저자**: Ashish Vaswani, Noam Shazeer 외 Google 연구진
+**저자**: Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, Illia Polosukhin
 **인용 횟수**: 173,000+ (2025년 기준, 21세기 Top 10 논문)
+**원본 논문**: [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
+
+#### 문제 정의와 동기
+
+기존 RNN/LSTM의 근본적 한계:
+- **순차 처리 필수**: 시간 단계 t-1이 완료되어야 t 처리 가능 (병렬화 불가)
+- **Long-range Dependencies**: 긴 시퀀스에서 멀리 떨어진 토큰 간 관계 학습 어려움
+- **Gradient Vanishing/Exploding**: 역전파 시 그래디언트 소실 또는 폭발
+- **메모리 병목**: 전체 시퀀스를 순차적으로 처리해야 하므로 메모리 효율 낮음
 
 #### 핵심 혁신
-1. **Self-Attention Mechanism**: 시퀀스 내 모든 위치 간의 관계를 동시에 계산
-2. **병렬 처리**: RNN/LSTM과 달리 병렬 학습 가능
-3. **위치 인코딩 (Positional Encoding)**: 순서 정보를 명시적으로 인코딩
+
+##### 1. Scaled Dot-Product Attention
+
+**수학적 정의**:
+```
+Attention(Q, K, V) = softmax(QK^T / √d_k) V
+```
+
+여기서:
+- Q (Query): 현재 위치에서 "무엇을 찾을지"를 나타내는 벡터
+- K (Key): 각 위치의 "내용"을 나타내는 벡터
+- V (Value): 실제 전달할 "정보"
+- d_k: Key 벡터의 차원 (스케일링 인자)
+
+**√d_k로 나누는 이유**:
+- d_k가 클수록 내적 값이 커져 softmax가 극단적으로 작은 그래디언트를 생성
+- 스케일링으로 안정적인 학습 가능
+
+**시간 복잡도**: O(n²·d) (n: 시퀀스 길이, d: 차원)
+- 모든 위치 쌍 간 attention 계산 필요
+
+##### 2. Multi-Head Attention
+
+**동기**: 단일 attention은 하나의 표현 공간에서만 동작
+- 다양한 관점(예: 구문, 의미, 문맥)에서 정보 수집 필요
+
+**수식**:
+```
+MultiHead(Q, K, V) = Concat(head_1, ..., head_h) W^O
+
+where head_i = Attention(QW_i^Q, KW_i^K, VW_i^V)
+```
+
+**원논문 설정**:
+- h = 8 (헤드 수)
+- d_model = 512 (모델 차원)
+- d_k = d_v = d_model/h = 64 (각 헤드의 차원)
+
+**장점**:
+- 각 헤드가 다른 표현 subspace에서 학습
+- 병렬 처리 가능
+- 앙상블 효과
+
+##### 3. Positional Encoding
+
+**문제**: Attention은 순서 정보가 없음 (permutation invariant)
+
+**해결책**: 사인/코사인 함수로 위치 정보 주입
+```
+PE(pos, 2i) = sin(pos / 10000^(2i/d_model))
+PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
+```
+
+여기서:
+- pos: 토큰의 위치 (0, 1, 2, ...)
+- i: 차원 인덱스
+
+**장점**:
+- 학습 불필요 (deterministic)
+- 임의 길이 시퀀스 처리 가능
+- 상대적 위치 관계 표현 가능
 
 #### 아키텍처 구성요소
+
+##### Encoder (N=6 레이어)
 ```
-Transformer = Encoder + Decoder
-
-Encoder:
-- Multi-Head Self-Attention
-- Feed-Forward Neural Network
-- Layer Normalization
-- Residual Connections
-
-Decoder:
-- Masked Multi-Head Self-Attention
-- Cross-Attention (Encoder-Decoder Attention)
-- Feed-Forward Neural Network
-- Layer Normalization
-- Residual Connections
+Input Embedding + Positional Encoding
+    ↓
+[Encoder Layer] × 6
+    ↓
+Output
 ```
 
-#### 주요 특징
-- **원래 목적**: 기계 번역 (Translation)
-- **학습 시간**: LSTM 대비 획기적으로 단축
-- **성능**: Translation 작업에서 SOTA(State-of-the-Art) 달성
+**각 Encoder Layer**:
+1. Multi-Head Self-Attention
+2. Add & Norm (Residual + Layer Normalization)
+3. Feed-Forward Network (FFN)
+4. Add & Norm
 
-#### 영향
-이 논문은 현대 AI의 기초가 되었으며, 이후 모든 LLM의 근간이 되는 아키텍처를 제시했습니다.
+**Feed-Forward Network**:
+```
+FFN(x) = max(0, xW_1 + b_1)W_2 + b_2
+```
+- 2개의 선형 변환 + ReLU
+- d_model = 512 → d_ff = 2048 → d_model = 512
+- 각 위치에 동일하게 적용 (position-wise)
+
+##### Decoder (N=6 레이어)
+
+**각 Decoder Layer**:
+1. Masked Multi-Head Self-Attention (미래 토큰 가려짐)
+2. Add & Norm
+3. Multi-Head Cross-Attention (Encoder 출력 참조)
+4. Add & Norm
+5. Feed-Forward Network
+6. Add & Norm
+
+**Masked Attention**:
+- 위치 i는 i 이전 위치만 참조 가능 (autoregressive)
+- Masking: Attention 행렬에서 미래 위치에 -∞ 적용
+
+#### Layer Normalization
+
+**수식**:
+```
+LN(x) = γ · (x - μ) / √(σ² + ε) + β
+```
+- μ: 평균, σ: 표준편차
+- γ, β: 학습 가능한 파라미터
+- 각 레이어의 출력을 정규화하여 학습 안정화
+
+#### 원논문 실험 설정
+
+**모델 크기**:
+- Base Model:
+  - N = 6, d_model = 512, d_ff = 2048, h = 8
+  - 파라미터: 65M
+- Big Model:
+  - N = 6, d_model = 1024, d_ff = 4096, h = 16
+  - 파라미터: 213M
+
+**학습**:
+- Optimizer: Adam (β₁=0.9, β₂=0.98, ε=10⁻⁹)
+- Learning Rate Schedule: Warmup + 감소
+  ```
+  lrate = d_model^(-0.5) · min(step^(-0.5), step · warmup_steps^(-1.5))
+  ```
+- Warmup steps: 4,000
+- Dropout: 0.1
+- Label Smoothing: 0.1
+
+**데이터셋**:
+- WMT 2014 English-German: 4.5M 문장 쌍
+- WMT 2014 English-French: 36M 문장 쌍
+
+#### 성능 결과
+
+**WMT 2014 English-German**:
+- BLEU: 28.4 (이전 SOTA 대비 +2.0)
+- 학습 시간: 3.5일 (8 P100 GPUs)
+
+**WMT 2014 English-French**:
+- BLEU: 41.8 (새로운 SOTA)
+- 학습 시간: 3.5일
+
+**학습 속도**:
+- Base model: 100,000 steps (12시간)
+- Big model: 300,000 steps (3.5일)
+
+#### 왜 Transformer가 성공했는가?
+
+1. **병렬화**: 모든 위치를 동시에 처리 → GPU 활용 극대화
+2. **Long-range Dependencies**: 직접 연결로 멀리 떨어진 토큰 간 관계 학습
+3. **유연성**: Encoder/Decoder 독립 사용 가능
+4. **확장성**: 레이어/헤드 수, 차원 쉽게 조정 가능
+
+#### 한계점
+
+1. **O(n²) 메모리 복잡도**: 긴 시퀀스에서 메모리 폭발
+2. **위치 정보 제한**: 고정된 positional encoding
+3. **계산 비용**: 모든 토큰 쌍 간 attention 계산 필요
+
+#### 영향과 파급 효과
+
+이 논문은 현대 AI의 기초가 되었으며:
+- **NLP 혁명**: BERT, GPT 등 모든 LLM의 기반
+- **Vision**: Vision Transformer (ViT)로 확장
+- **Audio**: Speech recognition, music generation
+- **Multi-modal**: CLIP, DALL-E 등
+
+**핵심 통찰**: "Attention is all you need" - 순환 구조 없이도 시퀀스 모델링 가능
 
 ---
 
@@ -168,26 +319,211 @@ OpenAI는 처음에 "악용 우려"를 이유로 전체 모델을 공개하지 �
 
 **개발**: OpenAI
 **논문**: "Language Models are Few-Shot Learners"
+**원본 논문**: [arXiv:2005.14165](https://arxiv.org/abs/2005.14165)
+**출시**: 2020년 5월 (논문), 2020년 7월 (API)
 
-#### 핵심 특징
-- **파라미터**: 1,750억 개 (GPT-2 대비 100배)
-- **컨텍스트 길이**: 2048 토큰
-- **아키텍처**: GPT-2와 동일, 단순히 규모만 확장
+#### 동기와 배경
 
-#### 학습 규모
-- 레이어 수: 96개
-- 어텐션 헤드: 96개
-- 학습 데이터: 수백 GB
+**핵심 질문**: "모델을 충분히 크게 만들면 무슨 일이 일어날까?"
 
-#### 획기적 능력
-1. **Few-shot Learning**: 몇 개의 예시만으로 새로운 작업 수행
-2. **In-context Learning**: 추가 학습 없이 프롬프트만으로 작업 수행
-3. **놀라운 일반화 능력**: 학습하지 않은 작업도 수행
+기존 패러다임의 한계:
+- **Task-specific Fine-tuning**: 각 작업마다 별도 학습 필요
+- **데이터 효율성**: 대량의 라벨링 데이터 요구
+- **일반화 한계**: 학습하지 않은 작업 수행 불가
 
-#### "스케일링 법칙" 검증
-- 모델 크기 증가 → 성능 향상
-- 데이터 증가 → 성능 향상
-- 컴퓨팅 증가 → 성능 향상
+GPT-3의 가설:
+- 충분히 큰 모델 + 충분한 데이터 → Few-shot/Zero-shot 능력 자연 발현
+
+#### 모델 아키텍처
+
+**기본 구조**: Decoder-only Transformer (GPT-2와 동일)
+
+**모델 크기 스펙트럼**:
+
+| 모델 | 파라미터 | 레이어 | d_model | 헤드 | d_head | 배치 크기 | Learning Rate |
+|------|---------|--------|---------|------|--------|-----------|---------------|
+| GPT-3 Small | 125M | 12 | 768 | 12 | 64 | 0.5M | 6.0 × 10⁻⁴ |
+| GPT-3 Medium | 350M | 24 | 1024 | 16 | 64 | 0.5M | 3.0 × 10⁻⁴ |
+| GPT-3 Large | 760M | 24 | 1536 | 16 | 96 | 0.5M | 2.5 × 10⁻⁴ |
+| GPT-3 XL | 1.3B | 24 | 2048 | 24 | 128 | 1M | 2.0 × 10⁻⁴ |
+| GPT-3 2.7B | 2.7B | 32 | 2560 | 32 | 80 | 1M | 1.6 × 10⁻⁴ |
+| GPT-3 6.7B | 6.7B | 32 | 4096 | 32 | 128 | 2M | 1.2 × 10⁻⁴ |
+| GPT-3 13B | 13B | 40 | 5120 | 40 | 128 | 2M | 1.0 × 10⁻⁴ |
+| **GPT-3 175B** | **175B** | **96** | **12288** | **96** | **128** | **3.2M** | **0.6 × 10⁻⁴** |
+
+**GPT-3 175B 상세 스펙**:
+- 총 파라미터: 175,255,498,752 개
+- 컨텍스트 길이: 2048 토큰
+- Vocabulary 크기: 50,257 (BPE)
+- Position encoding: Learned positional embeddings
+- Activation: GELU (Gaussian Error Linear Unit)
+- 모델 병렬화: 분산 학습 필수
+
+#### 학습 데이터
+
+**데이터셋 구성**:
+| 데이터셋 | 크기 | 토큰 수 | 가중치 | Epochs |
+|---------|------|---------|--------|--------|
+| Common Crawl (filtered) | 410B | ~410B | 60% | 0.44 |
+| WebText2 | 19B | ~19B | 22% | 2.9 |
+| Books1 | 12B | ~12B | 8% | 1.9 |
+| Books2 | 55B | ~55B | 8% | 0.43 |
+| Wikipedia | 3B | ~3B | 3% | 3.4 |
+
+**총 학습 토큰**: 약 300B (3000억) 토큰
+- 전체 데이터의 일부만 사용 (1 epoch 미만)
+- 고품질 데이터셋은 여러 번 학습
+
+**데이터 품질 관리**:
+- Common Crawl 필터링: 품질 낮은 콘텐츠 제거
+- 중복 제거: 문서 레벨 deduplication
+- 데이터 믹싱: 다양한 소스의 균형
+
+#### 학습 방법론
+
+**목적 함수**: 자기회귀 언어 모델링 (Autoregressive LM)
+```
+L = -Σ log P(x_t | x_1, ..., x_{t-1})
+```
+
+**최적화**:
+- Optimizer: Adam (β₁=0.9, β₂=0.95, ε=10⁻⁸)
+- Learning Rate: Cosine decay with warmup
+- Gradient Clipping: 1.0
+- Weight Decay: 0.1
+- Dropout: 일반적으로 없음 (큰 모델에서는 불필요)
+
+**학습 인프라**:
+- GPU: V100 기반 클러스터 (정확한 수는 비공개)
+- 학습 시간: 추정 수개월
+- 학습 비용: 추정 수백만 달러
+- 컴퓨팅: 약 3.14×10²³ FLOPs
+
+#### Few-shot Learning 패러다임
+
+**용어 정의**:
+- **Zero-shot**: 예시 없이 작업 설명만 제공
+- **One-shot**: 1개의 예시 제공
+- **Few-shot**: 일반적으로 10-100개 예시 제공
+
+**In-Context Learning**:
+```
+예시:
+Input: "영어를 프랑스어로 번역하세요.
+영어: Hello
+프랑스어: Bonjour
+영어: How are you?
+프랑스어: Comment allez-vous?
+영어: Good morning
+프랑스어:"
+
+Output: "Bonjour" (모델이 패턴을 학습하고 번역 수행)
+```
+
+**핵심 발견**: 모델 크기가 클수록 Few-shot 성능이 급격히 향상
+- 작은 모델: Few-shot ≈ Random
+- 큰 모델: Few-shot → Fine-tuning 수준
+
+#### 스케일링 법칙 (Scaling Laws)
+
+**Kaplan et al. 2020의 발견을 검증**:
+
+1. **Power Law 관계**:
+```
+Loss ∝ N^(-α)
+```
+여기서 N은 파라미터 수, α는 상수
+
+2. **성능 예측 가능**:
+- 모델 크기만 알면 대략적 성능 예측 가능
+- 작은 모델로 실험 → 큰 모델 성능 추정
+
+3. **최적 배분**:
+- 모델 크기와 데이터 크기를 동시에 늘려야 함
+- 계산 예산 C가 주어졌을 때:
+  - N ∝ C^0.73 (파라미터)
+  - D ∝ C^0.27 (데이터)
+
+#### 벤치마크 성능
+
+**Language Modeling**:
+- Penn Tree Bank (PTB): Perplexity 20.5
+- LAMBADA: Accuracy 76.2% (zero-shot)
+
+**Question Answering**:
+| 벤치마크 | Zero-shot | One-shot | Few-shot | SOTA |
+|---------|-----------|----------|----------|------|
+| TriviaQA | 64.3% | 68.0% | 71.2% | 84.1% |
+| WebQuestions | 14.4% | 25.3% | 41.5% | 50.1% |
+| Natural Questions | 14.6% | 23.0% | 29.9% | 44.7% |
+
+**Reading Comprehension**:
+- CoQA: F1 85.0 (few-shot), SOTA: 90.7
+- DROP: F1 36.5 (few-shot), SOTA: 83.1
+- QuAC: F1 44.3 (few-shot), SOTA: 75.1
+
+**SuperGLUE**:
+- Zero-shot: 71.8 (인간: 89.8)
+- Few-shot: 전체 작업에서 개선
+
+**Translation** (Few-shot):
+- En→Fr: BLEU 25.2 (비지도)
+- Fr→En: BLEU 32.6
+- En→De: BLEU 24.6
+
+**Arithmetic**:
+- 2-digit addition: 100% accuracy
+- 3-digit addition: ~80% accuracy
+- 2-digit subtraction: 94% accuracy
+
+#### 한계점과 실패 사례
+
+1. **추론 한계**:
+   - 복잡한 다단계 추론 어려움
+   - 상식 추론에서 여전히 오류
+
+2. **산술 능력**:
+   - 큰 숫자 연산에서 실패
+   - 4자리 이상 덧셈 정확도 급락
+
+3. **물리적 상식**:
+   - "치즈는 마우스보다 크다" 같은 기본 상식 오류
+
+4. **편향과 독성**:
+   - 학습 데이터의 편향 반영
+   - 유해 콘텐츠 생성 가능
+
+5. **비용**:
+   - 추론 비용 매우 높음
+   - API 호출당 과금 필요
+
+#### 사회적 영향
+
+**긍정적**:
+- AI democratization (API 제공)
+- 연구 가속화
+- 다양한 응용 가능
+
+**부정적**:
+- 환경 영향 (탄소 배출)
+- 정보 오염 가능성
+- 일자리 대체 우려
+
+#### 후속 영향
+
+GPT-3는 LLM 시대를 본격적으로 열었으며:
+- **Few-shot Learning 패러다임 확립**
+- **스케일링 법칙 검증**
+- **거대 모델의 가능성 입증**
+- **오픈소스 경쟁 촉발** (LLaMA, BLOOM 등)
+
+**핵심 통찰**: "규모만으로도 새로운 능력(emergent abilities)이 나타난다"
+
+#### 변형 모델
+
+- **GPT-3.5 (2022)**: Code-Davinci-002 등 코드 학습 강화
+- **InstructGPT (2022)**: RLHF로 instruction-following 개선
+- **ChatGPT (2022.11)**: 대화에 최적화, 전 세계적 돌풍
 
 이 발견은 이후 LLM 개발 방향을 결정하는 핵심 원칙이 되었습니다.
 
@@ -518,19 +854,230 @@ GPT-3.5와 비슷하거나 더 나은 성능을 보였습니다.
 
 ### Mamba (2023년 12월 논문, 2024년 발전)
 
-**개발**: Carnegie Mellon University, Princeton University
+**개발**: Albert Gu, Tri Dao (Carnegie Mellon University, Princeton University)
+**논문**: "Mamba: Linear-Time Sequence Modeling with Selective State Spaces"
+**원본 논문**: [arXiv:2312.00752](https://arxiv.org/abs/2312.00752)
+**코드**: [GitHub - state-spaces/mamba](https://github.com/state-spaces/mamba)
 
-#### 핵심 개념
-- **State Space Models (SSM)**: Transformer의 대안
-- **선형 시간 복잡도**: O(n) (Transformer는 O(n²))
-- **효율성**: 긴 시퀀스를 효율적으로 처리
+#### 동기: Transformer의 근본적 한계
 
-#### Selective State Spaces
-- 입력에 따라 SSM 파라미터가 동적으로 변경
-- 중요한 정보는 전파하고, 불필요한 정보는 잊음
+**Transformer의 문제점**:
+1. **O(n²) 복잡도**: 시퀀스 길이 n에 대해 제곱 시간/메모리 필요
+2. **KV 캐시**: 추론 시 선형 메모리 증가
+3. **긴 시퀀스 처리 한계**: 100K+ 토큰에서 실용성 저하
+
+**기존 SSM의 문제점**:
+- S4, H3 등 기존 State Space Models도 존재
+- 하지만 **content-based reasoning 약함** (모든 입력을 동일하게 처리)
+- Transformer의 attention만큼 유연하지 못함
+
+#### State Space Models (SSM) 기초
+
+**연속 시간 SSM**:
+```
+h'(t) = Ah(t) + Bx(t)
+y(t) = Ch(t) + Dx(t)
+```
+
+여기서:
+- x(t): 입력 신호
+- h(t): 은닉 상태 (hidden state)
+- y(t): 출력
+- A, B, C, D: 학습 가능한 파라미터 행렬
+
+**이산화 (Discretization)**:
+
+연속 시간을 이산 시간으로 변환 (Zero-Order Hold):
+```
+h_t = A̅ h_{t-1} + B̅ x_t
+y_t = C h_t
+
+where:
+A̅ = exp(ΔA)
+B̅ = (ΔA)^{-1}(exp(ΔA) - I) · ΔB
+```
+
+Δ는 step size (시간 간격)
+
+**Convolution View**:
+
+SSM은 컨볼루션으로도 표현 가능:
+```
+K = (CB̅, CA̅B̅, CA̅²B̅, ..., CA̅^{L-1}B̅)
+y = K * x
+```
+
+이는 FFT로 O(N log N)에 계산 가능!
+
+#### Mamba의 혁신: Selective State Spaces
+
+**핵심 아이디어**: SSM 파라미터를 입력에 따라 동적으로 변경
+
+**기존 SSM**: A, B, C, Δ가 모든 입력에 대해 고정
+**Mamba**: A, B, C, Δ를 입력 x의 함수로 만듦
+
+```
+B = B(x), C = C(x), Δ = Δ(x)
+
+구체적으로:
+B_t = Linear_B(x_t)
+C_t = Linear_C(x_t)
+Δ_t = Broadcast(Linear_Δ(x_t))
+```
+
+**왜 Selective인가?**
+
+1. **중요한 정보 선택적 저장**:
+   - 중요한 토큰: Δ 작게 → 상태에 오래 유지
+   - 불필요한 토큰: Δ 크게 → 빠르게 잊음
+
+2. **Context-aware Processing**:
+   - 입력 내용에 따라 다르게 처리
+   - Attention과 유사한 유연성 획득
+
+**대가: Hardware-aware Implementation 필요**
+
+Selective SSM은 컨볼루션으로 표현 불가 → 직접 재귀 계산 필요
+→ GPU에서 비효율적
+
+**해결책: Hardware-aware Algorithm**
+
+1. **Kernel Fusion**: 중간 결과를 HBM에 쓰지 않고 SRAM에서 처리
+2. **Recomputation**: 역전파 시 일부 값을 저장 대신 재계산
+3. **Parallel Scan**: 병렬 prefix sum 알고리즘 활용
+
+결과: **Wall-clock time에서도 Transformer보다 빠름!**
+
+#### Mamba Block 아키텍처
+
+```
+Input x
+    ↓
+[Linear Projection] → x, z (두 갈래로 분기)
+    ↓              ↓
+[Conv1D]          [SiLU]
+    ↓              ↓
+[SSM]  ──────────→ [×] (element-wise multiply)
+    ↓
+[Linear Projection]
+    ↓
+Output
+```
+
+**상세 구성**:
+1. Input projection: d → 2d (expand ratio)
+2. Conv1D: 로컬 의존성 포착 (커널 크기 4)
+3. Selective SSM: 긴 거리 의존성
+4. Gating (z 경로): 정보 흐름 제어
+5. Output projection: 2d → d
+
+**파라미터 초기화**:
+- A: S4D-Real 초기화 (안정적인 spectrum)
+- Δ: log-uniform 분포
+- B, C: Xavier/Kaiming 초기화
+
+#### 성능 비교
+
+**Language Modeling** (Pile 데이터셋):
+
+| 모델 | 파라미터 | Perplexity | 처리량 (tokens/s) |
+|------|---------|-----------|------------------|
+| Transformer | 125M | 18.3 | 1,200 |
+| Mamba | 130M | **17.8** | **3,400** |
+| Transformer | 350M | 14.2 | 800 |
+| Mamba | 370M | **13.9** | **2,100** |
+| Transformer | 1.3B | 10.5 | 400 |
+| Mamba | 1.4B | **10.1** | **1,400** |
+
+**Long-range Dependencies** (Long Range Arena):
+
+| 작업 | Transformer | S4 | Mamba |
+|------|-------------|-----|-------|
+| ListOps | 36.4 | 58.5 | **59.7** |
+| Text | 64.3 | 86.8 | **86.1** |
+| Retrieval | 57.5 | 90.9 | **91.5** |
+| Path-X | - | 88.0 | **94.5** |
+| Average | 52.7 | 81.1 | **82.9** |
+
+**추론 속도** (시퀀스 길이에 따른 latency):
+
+```
+시퀀스 길이 1K:
+- Transformer: 25ms
+- Mamba: 10ms (2.5× 빠름)
+
+시퀀스 길이 16K:
+- Transformer: 400ms
+- Mamba: 35ms (11× 빠름)
+
+시퀀스 길이 64K:
+- Transformer: OOM (Out of Memory)
+- Mamba: 120ms
+```
+
+#### 수학적 분석
+
+**시간 복잡도**:
+- Forward pass: O(BLDN)
+  - B: batch, L: seq length, D: dim, N: state size
+  - N은 작은 상수 (16 정도) → 실질적으로 O(LD)
+- Attention: O(L²D)
+- Mamba가 L에 대해 선형!
+
+**메모리 복잡도**:
+- Attention (추론): O(L) (KV cache)
+- Mamba (추론): O(N) (hidden state만 저장)
+- N ≪ L이므로 Mamba가 훨씬 효율적
+
+**표현력**:
+
+Mamba는 이론적으로 다음을 할 수 있음:
+1. **Selective Copying**: 특정 토큰만 선택적으로 복사
+2. **Induction Heads**: 패턴 반복 감지
+3. **Contextual Processing**: 문맥에 따른 다른 처리
+
+#### 한계점
+
+1. **역전파 복잡도**:
+   - Selectivity로 인해 재귀 계산 필요
+   - 하드웨어 최적화 필수
+
+2. **In-context Learning**:
+   - Transformer 대비 약간 떨어짐
+   - Few-shot에서 gap 존재
+
+3. **구현 복잡도**:
+   - CUDA 커널 직접 작성 필요
+   - 일반적인 프레임워크로 비효율적
+
+#### 실제 응용
+
+**Mamba-2.8B** (실전 모델):
+- Pythia-2.8B (Transformer)와 비교
+- 동일한 학습 데이터 (Pile, 300B 토큰)
+- 성능: Perplexity 8.5 (Pythia: 8.7)
+- 속도: 2× 빠른 학습, 5× 빠른 추론 (긴 시퀀스)
+
+**응용 분야**:
+1. **긴 문서 처리**: 법률 문서, 학술 논문
+2. **시계열 분석**: 센서 데이터, 주가 예측
+3. **생물정보학**: DNA 시퀀스 분석
+4. **오디오/비디오**: 긴 미디어 처리
+
+#### 후속 연구
+
+- **Mamba-2** (2024): 더 개선된 selective mechanism
+- **Vision Mamba**: 이미지에 적용
+- **Mamba-Transformer 하이브리드**: 두 장점 결합
 
 #### 의의
-Transformer 아키텍처를 대체할 수 있는 첫 번째 경쟁력 있는 대안
+
+Mamba는 Transformer 이후 **최초로 경쟁력 있는 대안 아키텍처**:
+1. **이론과 실전 모두 우수**: 복잡도와 실제 성능 모두 개선
+2. **긴 시퀀스 혁명**: 100K+ 토큰 처리 가능
+3. **새로운 패러다임**: Attention 없이도 가능함을 증명
+
+**핵심 통찰**: "Selectivity is all you need" - 입력에 따라 동적으로 처리하는 것이 핵심
 
 ---
 

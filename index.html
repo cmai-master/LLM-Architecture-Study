@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM 아키텍처 발전사 - 인터랙티브 타임라인</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #7c3aed;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #1e293b;
+            --card-bg: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border-color: #475569;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 60px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            opacity: 0.95;
+            margin-bottom: 30px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 40px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #6d28d9;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(124, 58, 237, 0.4);
+        }
+
+        .btn.active {
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+            transform: scale(1.05);
+        }
+
+        .search-box {
+            padding: 12px 20px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1em;
+            background: var(--card-bg);
+            color: var(--text-primary);
+            min-width: 300px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
+
+        .timeline {
+            position: relative;
+            padding: 40px 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: linear-gradient(180deg, var(--primary-color), var(--secondary-color));
+            transform: translateX(-50%);
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 60px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .timeline-item.left {
+            padding-right: 55%;
+        }
+
+        .timeline-item.right {
+            padding-left: 55%;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: 50%;
+            top: 30px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            border: 4px solid var(--dark-bg);
+            transform: translateX(-50%);
+            z-index: 10;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.3);
+            }
+            50% {
+                box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.1);
+            }
+        }
+
+        .timeline-card {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .timeline-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+            border-color: var(--primary-color);
+        }
+
+        .year-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .model-name {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .company {
+            color: var(--text-secondary);
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 15px 0;
+        }
+
+        .tag {
+            padding: 6px 14px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .tag-transformer { background: #3b82f6; color: white; }
+        .tag-moe { background: #8b5cf6; color: white; }
+        .tag-multimodal { background: #ec4899; color: white; }
+        .tag-reasoning { background: #f59e0b; color: white; }
+        .tag-opensource { background: #10b981; color: white; }
+        .tag-ssm { background: #06b6d4; color: white; }
+        .tag-china { background: #ef4444; color: white; }
+
+        .description {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-top: 15px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            overflow-y: auto;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideDown 0.4s;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .close-modal {
+            float: right;
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .close-modal:hover {
+            color: var(--danger-color);
+        }
+
+        .comparison-table {
+            width: 100%;
+            margin-top: 30px;
+            border-collapse: collapse;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .comparison-table th {
+            background: var(--dark-bg);
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .comparison-table tr:hover {
+            background: rgba(37, 99, 235, 0.1);
+        }
+
+        .architecture-viz {
+            margin: 30px 0;
+            padding: 30px;
+            background: var(--dark-bg);
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .arch-box {
+            display: inline-block;
+            padding: 20px 40px;
+            margin: 10px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: 10px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .filter-info {
+            text-align: center;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border: 1px solid var(--border-color);
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px;
+            margin-top: 60px;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .timeline::before {
+                left: 30px;
+            }
+
+            .timeline-item.left,
+            .timeline-item.right {
+                padding-left: 70px;
+                padding-right: 20px;
+            }
+
+            .timeline-dot {
+                left: 30px;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .search-box {
+                min-width: 100%;
+            }
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px 0;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LLM 아키텍처 발전사</h1>
+            <p class="subtitle">2017년 Transformer부터 2025년 최신 모델까지의 여정</p>
+        </header>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #3b82f6;"></div>
+                <span>Transformer</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #8b5cf6;"></div>
+                <span>MoE</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ec4899;"></div>
+                <span>Multimodal</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f59e0b;"></div>
+                <span>Reasoning</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #10b981;"></div>
+                <span>Open Source</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #06b6d4;"></div>
+                <span>State Space</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <input type="text" class="search-box" id="searchBox" placeholder="모델 이름이나 회사 검색...">
+            <button class="btn btn-primary active" data-filter="all">전체</button>
+            <button class="btn btn-primary" data-filter="transformer">Transformer</button>
+            <button class="btn btn-primary" data-filter="moe">MoE</button>
+            <button class="btn btn-primary" data-filter="multimodal">Multimodal</button>
+            <button class="btn btn-primary" data-filter="opensource">Open Source</button>
+            <button class="btn btn-secondary" id="compareBtn">아키텍처 비교</button>
+        </div>
+
+        <div class="filter-info" id="filterInfo">
+            전체 모델 표시 중
+        </div>
+
+        <div class="timeline" id="timeline">
+            <!-- Timeline items will be dynamically generated -->
+        </div>
+
+        <footer>
+            <p>LLM 아키텍처 학습 가이드 - Interactive Timeline</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">
+                2025년 11월 업데이트 |
+                <a href="LLM_Architecture_Guide.md" style="color: var(--primary-color);">마크다운 가이드 보기</a>
+            </p>
+        </footer>
+    </div>
+
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const models = [
+            {
+                year: 2017,
+                name: "Transformer",
+                company: "Google",
+                tags: ["transformer"],
+                description: "Self-Attention 메커니즘을 도입하여 현대 LLM의 기초를 마련한 혁명적 아키텍처",
+                parameters: "-",
+                context: "512",
+                innovation: "Self-Attention, 병렬 처리"
+            },
+            {
+                year: 2018,
+                name: "GPT-1",
+                company: "OpenAI",
+                tags: ["transformer", "opensource"],
+                description: "Generative Pre-training을 최초로 적용한 Decoder-only 모델",
+                parameters: "117M",
+                context: "512",
+                innovation: "Generative Pre-training"
+            },
+            {
+                year: 2018,
+                name: "BERT",
+                company: "Google",
+                tags: ["transformer", "opensource"],
+                description: "양방향 학습으로 텍스트 이해에 혁신을 가져온 Encoder-only 모델",
+                parameters: "340M",
+                context: "512",
+                innovation: "양방향 학습, MLM"
+            },
+            {
+                year: 2019,
+                name: "GPT-2",
+                company: "OpenAI",
+                tags: ["transformer"],
+                description: "Zero-shot Learning을 선보이며 스케일링의 중요성을 입증",
+                parameters: "1.5B",
+                context: "1024",
+                innovation: "Zero-shot Learning"
+            },
+            {
+                year: 2019,
+                name: "T5",
+                company: "Google",
+                tags: ["transformer", "opensource"],
+                description: "모든 NLP 작업을 Text-to-Text로 통일한 범용 프레임워크",
+                parameters: "11B",
+                context: "512",
+                innovation: "Text-to-Text 프레임워크"
+            },
+            {
+                year: 2020,
+                name: "GPT-3",
+                company: "OpenAI",
+                tags: ["transformer"],
+                description: "Few-shot Learning과 스케일링 법칙을 확립한 획기적 모델",
+                parameters: "175B",
+                context: "2048",
+                innovation: "Few-shot Learning, 스케일링"
+            },
+            {
+                year: 2022,
+                name: "PaLM",
+                company: "Google",
+                tags: ["transformer"],
+                description: "Pathways 시스템으로 효율적 대규모 학습을 실현",
+                parameters: "540B",
+                context: "2048",
+                innovation: "Pathways 시스템"
+            },
+            {
+                year: 2023,
+                name: "GPT-4",
+                company: "OpenAI",
+                tags: ["moe", "multimodal"],
+                description: "멀티모달과 MoE를 결합한 차세대 모델 (추정)",
+                parameters: "~1.8T",
+                context: "8K-32K",
+                innovation: "멀티모달, MoE"
+            },
+            {
+                year: 2023,
+                name: "LLaMA",
+                company: "Meta",
+                tags: ["transformer", "opensource"],
+                description: "효율적 아키텍처로 오픈소스 혁명을 주도",
+                parameters: "7B-65B",
+                context: "2048",
+                innovation: "RoPE, RMSNorm"
+            },
+            {
+                year: 2023,
+                name: "Claude",
+                company: "Anthropic",
+                tags: ["transformer"],
+                description: "Constitutional AI로 안전성과 유용성을 동시에 추구",
+                parameters: "-",
+                context: "100K",
+                innovation: "Constitutional AI"
+            },
+            {
+                year: 2023,
+                name: "Mistral 7B",
+                company: "Mistral AI",
+                tags: ["transformer", "opensource"],
+                description: "GQA와 Sliding Window로 작지만 강력한 모델 실현",
+                parameters: "7.3B",
+                context: "8K",
+                innovation: "GQA, Sliding Window"
+            },
+            {
+                year: 2023,
+                name: "Mixtral 8x7B",
+                company: "Mistral AI",
+                tags: ["moe", "opensource"],
+                description: "Sparse MoE로 효율성과 성능의 균형을 달성",
+                parameters: "46.7B (12.9B 활성)",
+                context: "32K",
+                innovation: "Sparse MoE"
+            },
+            {
+                year: 2024,
+                name: "Claude 3",
+                company: "Anthropic",
+                tags: ["transformer", "multimodal"],
+                description: "Opus, Sonnet, Haiku 3단계 라인업으로 다양한 요구 충족",
+                parameters: "-",
+                context: "200K",
+                innovation: "3-tier 라인업"
+            },
+            {
+                year: 2024,
+                name: "Gemini 1.5 Pro",
+                company: "Google",
+                tags: ["moe", "multimodal"],
+                description: "100만 토큰 컨텍스트로 초장문 처리의 새 지평을 열다",
+                parameters: "-",
+                context: "1M",
+                innovation: "초장문 컨텍스트"
+            },
+            {
+                year: 2024,
+                name: "GPT-4o",
+                company: "OpenAI",
+                tags: ["multimodal"],
+                description: "텍스트, 이미지, 오디오를 통합 처리하는 옴니모달 모델",
+                parameters: "-",
+                context: "128K",
+                innovation: "옴니모달, 실시간"
+            },
+            {
+                year: 2024,
+                name: "LLaMA 3",
+                company: "Meta",
+                tags: ["transformer", "opensource"],
+                description: "15조 토큰 학습으로 오픈소스의 새로운 표준 제시",
+                parameters: "8B-400B",
+                context: "8K",
+                innovation: "대규모 학습"
+            },
+            {
+                year: 2024,
+                name: "OpenAI o1",
+                company: "OpenAI",
+                tags: ["reasoning"],
+                description: "추론에 특화된 Reasoning-First 아키텍처의 시작",
+                parameters: "-",
+                context: "128K",
+                innovation: "Reasoning-First, CoT"
+            },
+            {
+                year: 2024,
+                name: "Mamba",
+                company: "CMU/Princeton",
+                tags: ["ssm", "opensource"],
+                description: "State Space Models로 Transformer의 대안 제시 (O(n) 복잡도)",
+                parameters: "-",
+                context: "무제한",
+                innovation: "State Space Models"
+            },
+            {
+                year: 2024,
+                name: "DeepSeek-V3",
+                company: "DeepSeek (중국)",
+                tags: ["moe", "china"],
+                description: "MoE와 MLA로 비용 효율성을 극대화한 중국 모델",
+                parameters: "671B (37B 활성)",
+                context: "128K",
+                innovation: "MLA, 비용 효율성"
+            },
+            {
+                year: 2024,
+                name: "Gemini 2.0",
+                company: "Google",
+                tags: ["moe", "multimodal"],
+                description: "200만 토큰 컨텍스트로 장문 처리의 극한을 추구",
+                parameters: "-",
+                context: "2M",
+                innovation: "200만 토큰 컨텍스트"
+            },
+            {
+                year: 2024,
+                name: "Liquid FMs",
+                company: "Liquid AI",
+                tags: ["ssm", "opensource"],
+                description: "동적 시스템 이론 기반의 비-Transformer 아키텍처",
+                parameters: "0.35B-40B",
+                context: "-",
+                innovation: "비-Transformer, 메모리 효율"
+            },
+            {
+                year: 2024,
+                name: "Claude 3.5 Sonnet",
+                company: "Anthropic",
+                tags: ["transformer", "multimodal"],
+                description: "코딩 성능 92%로 업계 최고 수준 달성",
+                parameters: "-",
+                context: "200K",
+                innovation: "코딩 특화"
+            },
+            {
+                year: 2025,
+                name: "Kimi K2",
+                company: "Moonshot AI (중국)",
+                tags: ["moe", "china"],
+                description: "MuonClip 옵티마이저로 학습 안정성을 혁신한 1조 파라미터 모델",
+                parameters: "1T (32B 활성)",
+                context: "128K",
+                innovation: "MuonClip, 에이전트 특화"
+            },
+            {
+                year: 2025,
+                name: "Qwen3",
+                company: "Alibaba (중국)",
+                tags: ["moe", "china", "opensource"],
+                description: "4배 많은 Expert와 Shared Expert로 효율성 극대화",
+                parameters: "30B-235B",
+                context: "-",
+                innovation: "Shared Expert, 하이브리드 어텐션"
+            },
+            {
+                year: 2025,
+                name: "DeepSeek V3.1/R1",
+                company: "DeepSeek (중국)",
+                tags: ["moe", "reasoning", "china"],
+                description: "Thinking/Non-thinking 듀얼 모드로 유연성을 극대화",
+                parameters: "671B (37B 활성)",
+                context: "128K",
+                innovation: "듀얼 모드, MLA"
+            }
+        ];
+
+        let filteredModels = [...models];
+        let currentFilter = 'all';
+
+        function renderTimeline() {
+            const timeline = document.getElementById('timeline');
+            timeline.innerHTML = '';
+
+            filteredModels.forEach((model, index) => {
+                const item = document.createElement('div');
+                item.className = `timeline-item ${index % 2 === 0 ? 'left' : 'right'}`;
+
+                const tagHTML = model.tags.map(tag =>
+                    `<span class="tag tag-${tag}">${getTagLabel(tag)}</span>`
+                ).join('');
+
+                item.innerHTML = `
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card" onclick="showDetails(${models.indexOf(model)})">
+                        <span class="year-badge">${model.year}</span>
+                        <h3 class="model-name">${model.name}</h3>
+                        <p class="company">${model.company}</p>
+                        <div class="tags">${tagHTML}</div>
+                        <p class="description">${model.description}</p>
+                        <div class="stats">
+                            <div class="stat">
+                                <div class="stat-label">파라미터</div>
+                                <div class="stat-value">${model.parameters}</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">컨텍스트</div>
+                                <div class="stat-value">${model.context}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                timeline.appendChild(item);
+            });
+        }
+
+        function getTagLabel(tag) {
+            const labels = {
+                'transformer': 'Transformer',
+                'moe': 'MoE',
+                'multimodal': 'Multimodal',
+                'reasoning': 'Reasoning',
+                'opensource': 'Open Source',
+                'ssm': 'State Space',
+                'china': 'China'
+            };
+            return labels[tag] || tag;
+        }
+
+        function filterModels(filter) {
+            currentFilter = filter;
+
+            if (filter === 'all') {
+                filteredModels = [...models];
+            } else {
+                filteredModels = models.filter(model => model.tags.includes(filter));
+            }
+
+            updateFilterInfo();
+            renderTimeline();
+        }
+
+        function searchModels(query) {
+            const lowerQuery = query.toLowerCase();
+            filteredModels = models.filter(model =>
+                model.name.toLowerCase().includes(lowerQuery) ||
+                model.company.toLowerCase().includes(lowerQuery) ||
+                model.description.toLowerCase().includes(lowerQuery)
+            );
+            updateFilterInfo();
+            renderTimeline();
+        }
+
+        function updateFilterInfo() {
+            const info = document.getElementById('filterInfo');
+            if (currentFilter === 'all') {
+                info.textContent = `전체 ${filteredModels.length}개 모델 표시 중`;
+            } else {
+                info.textContent = `${getTagLabel(currentFilter)} 필터: ${filteredModels.length}개 모델`;
+            }
+        }
+
+        function showDetails(index) {
+            const model = models[index];
+            const modal = document.getElementById('modal');
+            const content = document.getElementById('modalContent');
+
+            const tagHTML = model.tags.map(tag =>
+                `<span class="tag tag-${tag}">${getTagLabel(tag)}</span>`
+            ).join('');
+
+            content.innerHTML = `
+                <h2>${model.name}</h2>
+                <h3 style="color: var(--text-secondary); margin-bottom: 20px;">${model.company} | ${model.year}</h3>
+                <div class="tags" style="margin-bottom: 20px;">${tagHTML}</div>
+                <p style="font-size: 1.1em; line-height: 1.8; margin-bottom: 30px;">${model.description}</p>
+
+                <div class="architecture-viz">
+                    <h3 style="margin-bottom: 20px;">핵심 혁신</h3>
+                    <div class="arch-box">${model.innovation}</div>
+                </div>
+
+                <table class="comparison-table">
+                    <tr>
+                        <th>속성</th>
+                        <th>상세</th>
+                    </tr>
+                    <tr>
+                        <td>파라미터 수</td>
+                        <td>${model.parameters}</td>
+                    </tr>
+                    <tr>
+                        <td>컨텍스트 길이</td>
+                        <td>${model.context} 토큰</td>
+                    </tr>
+                    <tr>
+                        <td>주요 특징</td>
+                        <td>${model.tags.map(t => getTagLabel(t)).join(', ')}</td>
+                    </tr>
+                    <tr>
+                        <td>출시 연도</td>
+                        <td>${model.year}</td>
+                    </tr>
+                </table>
+            `;
+
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        function showComparison() {
+            const modal = document.getElementById('modal');
+            const content = document.getElementById('modalContent');
+
+            const comparisonHTML = `
+                <h2>아키텍처 패러다임 비교</h2>
+                <table class="comparison-table">
+                    <tr>
+                        <th>아키텍처</th>
+                        <th>주요 모델</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Decoder-only</strong></td>
+                        <td>GPT, LLaMA, PaLM</td>
+                        <td>생성 작업에 최적화, 구조 단순</td>
+                        <td>양방향 컨텍스트 활용 불가</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Encoder-only</strong></td>
+                        <td>BERT</td>
+                        <td>문맥 이해 우수, 양방향</td>
+                        <td>생성 작업 불가</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Encoder-Decoder</strong></td>
+                        <td>T5</td>
+                        <td>다양한 작업에 유연</td>
+                        <td>구조 복잡, 파라미터 많음</td>
+                    </tr>
+                    <tr>
+                        <td><strong>MoE</strong></td>
+                        <td>GPT-4, Mixtral, Gemini</td>
+                        <td>효율적 스케일링, 전문화</td>
+                        <td>라우팅 오버헤드</td>
+                    </tr>
+                    <tr>
+                        <td><strong>State Space</strong></td>
+                        <td>Mamba, Liquid FMs</td>
+                        <td>O(n) 복잡도, 메모리 효율</td>
+                        <td>아직 초기 단계</td>
+                    </tr>
+                </table>
+
+                <h3 style="margin-top: 40px; margin-bottom: 20px;">어텐션 메커니즘 비교</h3>
+                <table class="comparison-table">
+                    <tr>
+                        <th>메커니즘</th>
+                        <th>특징</th>
+                        <th>사용 모델</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Standard MHA</strong></td>
+                        <td>독립적 Key-Value, 높은 메모리</td>
+                        <td>초기 Transformer 모델</td>
+                    </tr>
+                    <tr>
+                        <td><strong>GQA</strong></td>
+                        <td>Key-Value 공유, 효율성 증가</td>
+                        <td>LLaMA 3, Mistral, Qwen3</td>
+                    </tr>
+                    <tr>
+                        <td><strong>MLA</strong></td>
+                        <td>잠재 표현 압축, 극한 효율</td>
+                        <td>DeepSeek V3/V3.1</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Sliding Window</strong></td>
+                        <td>고정 윈도우, 긴 시퀀스 효율</td>
+                        <td>Mistral 7B</td>
+                    </tr>
+                </table>
+            `;
+
+            content.innerHTML = comparisonHTML;
+            modal.style.display = 'block';
+        }
+
+        // Event Listeners
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            searchModels(e.target.value);
+        });
+
+        document.querySelectorAll('[data-filter]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                filterModels(e.target.dataset.filter);
+            });
+        });
+
+        document.getElementById('compareBtn').addEventListener('click', showComparison);
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('modal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        };
+
+        // Initial render
+        renderTimeline();
+        updateFilterInfo();
+    </script>
+</body>
+</html>
